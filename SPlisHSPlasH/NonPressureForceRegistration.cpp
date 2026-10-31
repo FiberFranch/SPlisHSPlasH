@@ -20,6 +20,7 @@
 #ifdef USE_THIRD_PARTY_METHODS
 #include "Elasticity/Elasticity_Kee2023.h"
 #endif
+#include "Elasticity/Elasticity_Test2026.h"
 
 #include "SurfaceTension/SurfaceTension_Becker2007.h"
 #include "SurfaceTension/SurfaceTension_Akinci2013.h"
@@ -45,6 +46,7 @@ void Simulation::registerNonpressureForces()
 #ifdef USE_THIRD_PARTY_METHODS
 	addElasticityMethod(Elasticity_Kee2023::METHOD_NAME, Elasticity_Kee2023::creator);
 #endif
+	addElasticityMethod(Elasticity_Test2026::METHOD_NAME, Elasticity_Test2026::creator);
 
 	addSurfaceTensionMethod("None", [](FluidModel*) -> NonPressureForceBase* { return nullptr; });
 	addSurfaceTensionMethod(SurfaceTension_Becker2007::METHOD_NAME, SurfaceTension_Becker2007::creator);

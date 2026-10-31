@@ -26,11 +26,6 @@ Elasticity_Test2026::~Elasticity_Test2026(void)
     m_model->removeFieldByName("deviatoric stress");
 }
 
-void Elasticity_Test2026::deferredInit()
-{
-
-}
-
 void Elasticity_Test2026::initParameters()
 {
     NonPressureForceBase::initParameters();

@@ -128,12 +128,14 @@ set(ELASTICITY_HEADER_FILES
 	Elasticity/Elasticity_Becker2009.h	
 	Elasticity/Elasticity_Peer2018.h
 	Elasticity/Elasticity_Kugelstadt2021.h
+	Elasticity/Elasticity_Test2026.h
 	)
 	
 set(ELASTICITY_SOURCE_FILES
 	Elasticity/Elasticity_Becker2009.cpp
 	Elasticity/Elasticity_Peer2018.cpp
 	Elasticity/Elasticity_Kugelstadt2021.cpp
+	Elasticity/Elasticity_Test2026.cpp
 	)
 	
 set(UTILS_HEADER_FILES

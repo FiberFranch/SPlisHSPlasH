@@ -30,7 +30,6 @@ namespace SPH
 		void computeForces();
 
 		virtual void initParameters();
-		virtual void deferredInit();
 
 		//////////////////////////////////////////////////////////////////////////
 		// multiplication of symmetric matrix, represented by a 6D vector, and a

@@ -19,6 +19,8 @@ namespace SPH
 	protected:
 		Real m_youngsModulus;
 		Real m_poissonRatio;
+		Vector3r m_fixedBoxMin;
+		Vector3r m_fixedBoxMax;
 
 		// Deviatoric shear stress tensor for each particle
 		std::vector<Vector6r> m_stress;
@@ -28,6 +30,7 @@ namespace SPH
 
 		void computeStress();
 		void computeForces();
+		void determineFixedParticles();
 
 		virtual void initParameters();
 
@@ -46,6 +49,8 @@ namespace SPH
 		static std::string METHOD_NAME;
 		static int YOUNGS_MODULUS;
 		static int POISSON_RATIO;
+		static int FIXED_BOX_MIN;
+		static int FIXED_BOX_MAX;
 
 		Elasticity_Test2026(FluidModel *model);
 		virtual ~Elasticity_Test2026(void);

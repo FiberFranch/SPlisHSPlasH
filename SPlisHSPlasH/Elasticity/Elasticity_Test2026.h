@@ -17,10 +17,20 @@ namespace SPH
 	class Elasticity_Test2026 : public NonPressureForceBase
 	{
 	protected:
+		struct ElasticObject
+		{
+			std::vector<unsigned int> m_particleIndices;
+			unsigned int m_nFixed = 0;
+
+			ElasticObject() { m_nFixed = 0; }
+			~ElasticObject() {}
+		};
+		
 		Real m_youngsModulus;
 		Real m_poissonRatio;
 		Vector3r m_fixedBoxMin;
 		Vector3r m_fixedBoxMax;
+		std::vector<ElasticObject*> m_objects;
 
 		// Deviatoric shear stress tensor for each particle
 		std::vector<Vector6r> m_stress;
@@ -33,6 +43,15 @@ namespace SPH
 		void determineFixedParticles();
 
 		virtual void initParameters();
+		/** This function is called after the simulation scene is loaded and all
+		* parameters are initialized. While reading a scene file several parameters
+		* can change. The deferred init function should initialize all values which
+		* depend on these parameters.
+		*/
+		virtual void deferredInit();
+
+		void initValues();
+		void findObjects();
 
 		//////////////////////////////////////////////////////////////////////////
 		// multiplication of symmetric matrix, represented by a 6D vector, and a

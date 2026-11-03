@@ -1,3 +1,4 @@
+// #define ELASTICITY_DEBUG_SINGLE_THREAD
 #include "Elasticity_Test2026.h"
 #include "SPlisHSPlasH/Simulation.h"
 #include "SPlisHSPlasH/TimeManager.h"
@@ -9,6 +10,8 @@ using namespace GenParam;
 std::string Elasticity_Test2026::METHOD_NAME = "Elasticity Test 2026";
 int Elasticity_Test2026::YOUNGS_MODULUS = -1;
 int Elasticity_Test2026::POISSON_RATIO = -1;
+int Elasticity_Test2026::FIXED_BOX_MIN = -1;
+int Elasticity_Test2026::FIXED_BOX_MAX = -1;
 
 Elasticity_Test2026::Elasticity_Test2026(FluidModel *model) : NonPressureForceBase(model)
 {
@@ -17,6 +20,8 @@ Elasticity_Test2026::Elasticity_Test2026(FluidModel *model) : NonPressureForceBa
 
     m_youngsModulus = static_cast<Real>(100000.0);
     m_poissonRatio = static_cast<Real>(0.3);
+    m_fixedBoxMin.setZero();
+    m_fixedBoxMax.setZero();
 
     model->addField({ "deviatoric stress", METHOD_NAME, FieldType::Vector6, [&](const unsigned int i) -> Real* { return &m_stress[i][0]; }, true });
 }
@@ -24,6 +29,11 @@ Elasticity_Test2026::Elasticity_Test2026(FluidModel *model) : NonPressureForceBa
 Elasticity_Test2026::~Elasticity_Test2026(void)
 {
     m_model->removeFieldByName("deviatoric stress");
+}
+
+void Elasticity_Test2026::deferredInit()
+{
+    initValues();
 }
 
 void Elasticity_Test2026::initParameters()
@@ -43,6 +53,109 @@ void Elasticity_Test2026::initParameters()
     rparam->setMinValue(static_cast<Real>(-1.0 + 1e-4));
     rparam->setMaxValue(static_cast<Real>(0.5 - 1e-4));
 
+    ParameterBase::GetVecFunc<Real> getFctFMin = [&]()-> Real* { return m_fixedBoxMin.data(); };
+    ParameterBase::SetVecFunc<Real> setFctFMin = [&](Real* val)
+    {
+        m_fixedBoxMin = Vector3r(val[0], val[1], val[2]);
+        determineFixedParticles();
+    };
+    FIXED_BOX_MIN = createVectorParameter("fixedBoxMin", "Fixed box min", 3u, getFctFMin, setFctFMin);
+    setGroup(FIXED_BOX_MIN, "Fluid Model|Elasticity");
+    setDescription(FIXED_BOX_MIN, "Minimum point of box of which contains the fixed particles.");
+    getParameter(FIXED_BOX_MIN)->setReadOnly(true);
+
+    ParameterBase::GetVecFunc<Real> getFctFMax = [&]()-> Real* { return m_fixedBoxMax.data(); };
+    ParameterBase::SetVecFunc<Real> setFctFMax = [&](Real* val)
+    {
+        m_fixedBoxMax = Vector3r(val[0], val[1], val[2]);
+        determineFixedParticles();
+    };
+    FIXED_BOX_MAX = createVectorParameter("fixedBoxMax", "Fixed box max", 3u, getFctFMax, setFctFMax);
+    setGroup(FIXED_BOX_MAX, "Fluid Model|Elasticity");
+    setDescription(FIXED_BOX_MAX, "Maximum point of box of which contains the fixed particles.");
+    getParameter(FIXED_BOX_MAX)->setReadOnly(true);
+
+}
+
+/** Mark all particles in the bounding box as fixed.
+*/
+void Elasticity_Test2026::determineFixedParticles()
+{
+    const unsigned int numParticles = m_model->numActiveParticles();
+    int numFixed = 0;
+
+    if (!m_fixedBoxMin.isZero() || !m_fixedBoxMax.isZero())
+    {
+        for (int i = 0; i < (int)numParticles; i++)
+        {
+            const Vector3r& x = m_model->getPosition0(i);
+            if ((x[0] > m_fixedBoxMin[0]) && (x[1] > m_fixedBoxMin[1]) && (x[2] > m_fixedBoxMin[2]) &&
+                (x[0] < m_fixedBoxMax[0]) && (x[1] < m_fixedBoxMax[1]) && (x[2] < m_fixedBoxMax[2]))
+            {
+                m_model->setParticleState(i, ParticleState::Fixed);
+                numFixed++;
+            }
+        }
+    }
+    LOG_INFO << "Elasticity_Test2026: Marked " << numFixed << " particles as fixed.";
+}
+
+void Elasticity_Test2026::initValues()
+{
+    determineFixedParticles();
+    findObjects();
+}
+
+void Elasticity_Test2026::findObjects()
+{
+    const unsigned int numParticles = m_model->numActiveParticles();
+    m_objects.clear();
+    std::map<unsigned int, unsigned int> obj2group;
+
+    for (unsigned int i = 0; i < numParticles; i++)
+    {
+        const unsigned int objId = m_model->getObjectId(i);
+
+        if (obj2group.find(objId) == obj2group.end())
+        {
+            m_objects.push_back(new ElasticObject());
+            const unsigned int groupIndex = (unsigned int)(m_objects.size() - 1);
+            obj2group[objId] = groupIndex;
+            m_objects[groupIndex]->m_particleIndices.push_back(i);
+        }
+        else
+        {
+            const unsigned int groupIndex = obj2group[objId];
+            m_objects[groupIndex]->m_particleIndices.push_back(i);
+        }
+    }
+
+    for (size_t groupIndex = 0; groupIndex < m_objects.size(); groupIndex++)
+    {
+        struct Comparator {
+            Comparator(Elasticity_Test2026* _this) : m_this(_this) {};
+            bool operator()(unsigned int a, unsigned int b)
+            {
+                if ((m_this->m_model->getParticleState(a) != ParticleState::Active) && (m_this->m_model->getParticleState(b) == ParticleState::Active))
+                    return false;
+                else if ((m_this->m_model->getParticleState(a) == ParticleState::Active) && (m_this->m_model->getParticleState(b) != ParticleState::Active))
+                    return true;
+                else
+                    return a < b;
+            }
+            Elasticity_Test2026* m_this;
+        };
+
+        std::sort(m_objects[groupIndex]->m_particleIndices.begin(), m_objects[groupIndex]->m_particleIndices.end(), Comparator(this));
+
+        m_objects[groupIndex]->m_nFixed = 0;
+        for (size_t i = 0; i < m_objects[groupIndex]->m_particleIndices.size(); i++)
+        {
+            if (m_model->getParticleState(m_objects[groupIndex]->m_particleIndices[i]) != ParticleState::Active)
+                m_objects[groupIndex]->m_nFixed++;
+        }
+        LOG_INFO << "Object " << groupIndex << " - fixed particles: " << m_objects[groupIndex]->m_nFixed;
+    }
 }
 
 void Elasticity_Test2026::step()
@@ -63,9 +176,11 @@ void Elasticity_Test2026::computeStress()
 
     Real mu = m_youngsModulus / (static_cast<Real>(2.0) * (static_cast<Real>(1.0) + m_poissonRatio));
 
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     #pragma omp parallel default(shared)
     {
         #pragma omp for schedule(static)
+#endif
         for (int i = 0; i < (int)numParticles; i++)
         {
             if (m_model->getParticleState(i) == ParticleState::Active)
@@ -109,7 +224,9 @@ void Elasticity_Test2026::computeStress()
                 m_stress[i][5] = stressMat(1, 2);
             }
         }
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     }
+#endif
 }
 
 void Elasticity_Test2026::computeForces()
@@ -120,9 +237,11 @@ void Elasticity_Test2026::computeForces()
     Simulation *sim = Simulation::getCurrent();
     const unsigned int fluidModelIndex = m_model->getPointSetIndex();
 
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     #pragma omp parallel default(shared)
     {
         #pragma omp for schedule(static)
+#endif
         for (int i = 0; i < (int)numParticles; i++)
         {
             if (m_model->getParticleState(i) == ParticleState::Active)
@@ -162,7 +281,9 @@ void Elasticity_Test2026::computeForces()
                 ai += force / mi;
             }
         }
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     }
+#endif
 }
 
 void Elasticity_Test2026::reset()

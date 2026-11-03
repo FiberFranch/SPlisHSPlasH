@@ -1,4 +1,4 @@
-// #define ELASTICITY_DEBUG_SINGLE_THREAD
+#define ELASTICITY_DEBUG_SINGLE_THREAD
 #include "Elasticity_Test2026.h"
 #include "SPlisHSPlasH/Simulation.h"
 #include "SPlisHSPlasH/TimeManager.h"
@@ -34,19 +34,34 @@ Elasticity_Test2026::~Elasticity_Test2026(void)
 void Elasticity_Test2026::deferredInit()
 {
     initValues();
+    LOG_INFO << "METHOD: " << METHOD_NAME;
+    LOG_INFO << "youngsModulus: " << m_youngsModulus;
+    LOG_INFO << "poissonsRatio: " << m_poissonRatio;
+    LOG_INFO << "fixedBoxMin: " << m_fixedBoxMin.x() << ", " << m_fixedBoxMin.y() << ", " << m_fixedBoxMin.z();
+    LOG_INFO << "fixedBoxMax: " << m_fixedBoxMax.x() << ", " << m_fixedBoxMax.y() << ", " << m_fixedBoxMax.z();
 }
 
 void Elasticity_Test2026::initParameters()
 {
     NonPressureForceBase::initParameters();
 
-    YOUNGS_MODULUS = createNumericParameter("youngsModulus", "Young`s modulus", &m_youngsModulus);
+    ParameterBase::GetFunc<Real> getFctYM = [&]()-> Real { return m_youngsModulus; };
+    ParameterBase::SetFunc<Real> setFctYM = [&](Real val)
+    {
+        m_youngsModulus = val;
+    };
+    YOUNGS_MODULUS = createNumericParameter("youngsModulus", "Young`s modulus", getFctYM, setFctYM);
     setGroup(YOUNGS_MODULUS, "Fluid Model|Elasticity");
     setDescription(YOUNGS_MODULUS, "Stiffness of the elastic material");
     RealParameter* rparam = static_cast<RealParameter*>(getParameter(YOUNGS_MODULUS));
     rparam->setMinValue(0.0);
 
-    POISSON_RATIO = createNumericParameter("poissonsRatio", "Poisson`s ratio", &m_poissonRatio);
+    ParameterBase::GetFunc<Real> getFctPR = [&]()-> Real { return m_poissonRatio; };
+    ParameterBase::SetFunc<Real> setFctPR = [&](Real val)
+    {
+        m_poissonRatio = val;
+    };
+    POISSON_RATIO = createNumericParameter("poissonsRatio", "Poisson`s ratio", getFctPR, setFctPR);
     setGroup(POISSON_RATIO, "Fluid Model|Elasticity");
     setDescription(POISSON_RATIO, "Ratio of transversal expansion and axial compression");
     rparam = static_cast<RealParameter*>(getParameter(POISSON_RATIO));
@@ -54,27 +69,28 @@ void Elasticity_Test2026::initParameters()
     rparam->setMaxValue(static_cast<Real>(0.5 - 1e-4));
 
     ParameterBase::GetVecFunc<Real> getFctFMin = [&]()-> Real* { return m_fixedBoxMin.data(); };
-    ParameterBase::SetVecFunc<Real> setFctFMin = [&](Real* val)
-    {
-        m_fixedBoxMin = Vector3r(val[0], val[1], val[2]);
-        determineFixedParticles();
-    };
-    FIXED_BOX_MIN = createVectorParameter("fixedBoxMin", "Fixed box min", 3u, getFctFMin, setFctFMin);
-    setGroup(FIXED_BOX_MIN, "Fluid Model|Elasticity");
-    setDescription(FIXED_BOX_MIN, "Minimum point of box of which contains the fixed particles.");
-    getParameter(FIXED_BOX_MIN)->setReadOnly(true);
+	ParameterBase::SetVecFunc<Real> setFctFMin = [&](Real* val)
+	{
+		m_fixedBoxMin = Vector3r(val[0], val[1], val[2]);
+		determineFixedParticles();
+	};
+	FIXED_BOX_MIN = createVectorParameter("fixedBoxMin", "Fixed box min", 3u, getFctFMin, setFctFMin);
+	setGroup(FIXED_BOX_MIN, "Fluid Model|Elasticity");
+	setDescription(FIXED_BOX_MIN, "Minimum point of box of which contains the fixed particles.");
+	getParameter(FIXED_BOX_MIN)->setReadOnly(true);
 
-    ParameterBase::GetVecFunc<Real> getFctFMax = [&]()-> Real* { return m_fixedBoxMax.data(); };
-    ParameterBase::SetVecFunc<Real> setFctFMax = [&](Real* val)
-    {
-        m_fixedBoxMax = Vector3r(val[0], val[1], val[2]);
-        determineFixedParticles();
-    };
-    FIXED_BOX_MAX = createVectorParameter("fixedBoxMax", "Fixed box max", 3u, getFctFMax, setFctFMax);
-    setGroup(FIXED_BOX_MAX, "Fluid Model|Elasticity");
-    setDescription(FIXED_BOX_MAX, "Maximum point of box of which contains the fixed particles.");
-    getParameter(FIXED_BOX_MAX)->setReadOnly(true);
+	ParameterBase::GetVecFunc<Real> getFctFMax = [&]()-> Real* { return m_fixedBoxMax.data(); };
+	ParameterBase::SetVecFunc<Real> setFctFMax = [&](Real* val)
+	{
+		m_fixedBoxMax = Vector3r(val[0], val[1], val[2]);
+		determineFixedParticles();
+	};
+	FIXED_BOX_MAX = createVectorParameter("fixedBoxMax", "Fixed box max", 3u, getFctFMax, setFctFMax);
+	setGroup(FIXED_BOX_MAX, "Fluid Model|Elasticity");
+	setDescription(FIXED_BOX_MAX, "Maximum point of box of which contains the fixed particles.");
+	getParameter(FIXED_BOX_MAX)->setReadOnly(true);
 
+    LOG_INFO << "Elasticity_Test2026::initParameters called";
 }
 
 /** Mark all particles in the bounding box as fixed.
@@ -82,7 +98,6 @@ void Elasticity_Test2026::initParameters()
 void Elasticity_Test2026::determineFixedParticles()
 {
     const unsigned int numParticles = m_model->numActiveParticles();
-    int numFixed = 0;
 
     if (!m_fixedBoxMin.isZero() || !m_fixedBoxMax.isZero())
     {
@@ -93,69 +108,30 @@ void Elasticity_Test2026::determineFixedParticles()
                 (x[0] < m_fixedBoxMax[0]) && (x[1] < m_fixedBoxMax[1]) && (x[2] < m_fixedBoxMax[2]))
             {
                 m_model->setParticleState(i, ParticleState::Fixed);
-                numFixed++;
             }
         }
     }
-    LOG_INFO << "Elasticity_Test2026: Marked " << numFixed << " particles as fixed.";
 }
 
 void Elasticity_Test2026::initValues()
 {
-    determineFixedParticles();
-    findObjects();
-}
-
-void Elasticity_Test2026::findObjects()
-{
     const unsigned int numParticles = m_model->numActiveParticles();
-    m_objects.clear();
-    std::map<unsigned int, unsigned int> obj2group;
 
-    for (unsigned int i = 0; i < numParticles; i++)
+    // Reset all particles to Active
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
+    #pragma omp parallel for schedule(static)
+#endif
+    for (int i = 0; i < (int)numParticles; i++)
     {
-        const unsigned int objId = m_model->getObjectId(i);
-
-        if (obj2group.find(objId) == obj2group.end())
-        {
-            m_objects.push_back(new ElasticObject());
-            const unsigned int groupIndex = (unsigned int)(m_objects.size() - 1);
-            obj2group[objId] = groupIndex;
-            m_objects[groupIndex]->m_particleIndices.push_back(i);
-        }
-        else
-        {
-            const unsigned int groupIndex = obj2group[objId];
-            m_objects[groupIndex]->m_particleIndices.push_back(i);
-        }
+        if (m_model->getParticleState(i) == ParticleState::Fixed)
+            m_model->setParticleState(i, ParticleState::Active);
     }
 
-    for (size_t groupIndex = 0; groupIndex < m_objects.size(); groupIndex++)
-    {
-        struct Comparator {
-            Comparator(Elasticity_Test2026* _this) : m_this(_this) {};
-            bool operator()(unsigned int a, unsigned int b)
-            {
-                if ((m_this->m_model->getParticleState(a) != ParticleState::Active) && (m_this->m_model->getParticleState(b) == ParticleState::Active))
-                    return false;
-                else if ((m_this->m_model->getParticleState(a) == ParticleState::Active) && (m_this->m_model->getParticleState(b) != ParticleState::Active))
-                    return true;
-                else
-                    return a < b;
-            }
-            Elasticity_Test2026* m_this;
-        };
+    LOG_INFO << "Box min: " << m_fixedBoxMin.x() << ", " << m_fixedBoxMin.y() << ", " << m_fixedBoxMin.z();
+    LOG_INFO << "Box max: " << m_fixedBoxMax.x() << ", " << m_fixedBoxMax.y() << ", " << m_fixedBoxMax.z();
 
-        std::sort(m_objects[groupIndex]->m_particleIndices.begin(), m_objects[groupIndex]->m_particleIndices.end(), Comparator(this));
-
-        m_objects[groupIndex]->m_nFixed = 0;
-        for (size_t i = 0; i < m_objects[groupIndex]->m_particleIndices.size(); i++)
-        {
-            if (m_model->getParticleState(m_objects[groupIndex]->m_particleIndices[i]) != ParticleState::Active)
-                m_objects[groupIndex]->m_nFixed++;
-        }
-        LOG_INFO << "Object " << groupIndex << " - fixed particles: " << m_objects[groupIndex]->m_nFixed;
-    }
+    // mark all particles in the bounding box as fixed
+    determineFixedParticles();
 }
 
 void Elasticity_Test2026::step()

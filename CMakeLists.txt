@@ -67,3 +67,7 @@ if (NOT SPH_LIBS_ONLY)
 		add_subdirectory(pySPlisHSPlasH)
 	endif ()
 endif()
+
+if (MSVC)
+    target_compile_options(SimulatorBase PRIVATE /bigobj)
+endif()

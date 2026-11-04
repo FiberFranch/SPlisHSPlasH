@@ -37,12 +37,10 @@
             {
                 "viscosity": 0.01
             },
-			"Kugelstadt et al. 2021": 
+			"Elasticity Test 2026": 
 			{
 				"youngsModulus": 5000000.0,
-				"poissonsRatio": 0.33, 
-				"alpha": 0.1,
-				"maxNeighbors": 15,
+				"poissonsRatio": 0.33,
 				"fixedBoxMin" : [-10,-10,-10], 
 				"fixedBoxMax" : [-1.5,10,10]
 			}

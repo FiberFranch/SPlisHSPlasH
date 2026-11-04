@@ -1,4 +1,5 @@
-#define ELASTICITY_DEBUG_SINGLE_THREAD
+// #define ELASTICITY_DEBUG_SINGLE_THREAD
+
 #include "Elasticity_Test2026.h"
 #include "SPlisHSPlasH/Simulation.h"
 #include "SPlisHSPlasH/TimeManager.h"
@@ -200,6 +201,13 @@ void Elasticity_Test2026::computeStress()
                 m_stress[i][5] = stressMat(1, 2);
             }
         }
+        Real maxStress = 0.0;
+        for (int i = 0; i < (int)numParticles; i++)
+        {
+            for (int k = 0; k < 6; k++)
+                maxStress = std::max(maxStress, std::abs(m_stress[i][k]));
+        }
+        LOG_INFO << "Step " << TimeManager::getCurrent()->getTime() << "  max |stress| = " << maxStress;
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     }
 #endif

@@ -1,3 +1,5 @@
+#define ROTATING_CUBE_TEST
+
 #include "TimeStepWCSPH.h"
 #include "SPlisHSPlasH/TimeManager.h"
 #include "SPlisHSPlasH/SPHKernels.h"
@@ -125,8 +127,14 @@ void TimeStepWCSPH::step()
 					Vector3r &pos = model->getPosition(i);
 					Vector3r &vel = model->getVelocity(i);
 					Vector3r &accel = model->getAcceleration(i);
+#ifndef ROTATING_CUBE_TEST
 					accel += m_simulationData.getPressureAccel(fluidModelIndex, i);
 					vel += accel * h;
+					#else
+					// Prescribed rigid rotation around the z-axis
+                	const Real omega = 1.0;
+                	vel = Vector3r(-omega * pos.y(), omega * pos.x(), 0.0);
+#endif
 					pos += vel * h;
 				}
 			}

@@ -181,6 +181,10 @@ void Elasticity_Test2026::computeStress()
                 Matrix3r strainRate = static_cast<Real>(0.5) * (gradV + gradV.transpose());
                 Matrix3r spinRate = static_cast<Real>(0.5) * (gradV - gradV.transpose());
 
+                Real maxStrain = strainRate.norm();
+                Real maxSpin = spinRate.norm();
+                LOG_INFO << "max |strainRate| = " << maxStrain << "  max |spinRate| = " << maxSpin;
+
                 Matrix3r stressMat;
                 stressMat(0, 0) = m_stress[i][0];
                 stressMat(1, 1) = m_stress[i][1];

@@ -109,7 +109,7 @@ namespace Utilities
 	public:
 		BufferSink(const LogLevel minLevel) : LogSink(minLevel) 
 		{
-			m_buffer.reserve(10000);
+			m_buffer.reserve(100000);
 		}
 
 		virtual void write(const Utilities::LogLevel level, const std::string& str)

@@ -74,5 +74,5 @@ vcpkg_installed/
 Testing/
 .cache/
 
-# vscode files
-# .vscode/*
+# VS Code files
+.vscode/

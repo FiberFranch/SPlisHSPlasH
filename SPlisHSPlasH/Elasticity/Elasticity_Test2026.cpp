@@ -24,6 +24,8 @@ Elasticity_Test2026::Elasticity_Test2026(FluidModel *model) : NonPressureForceBa
     m_fixedBoxMin.setZero();
     m_fixedBoxMax.setZero();
 
+    // Init stress with 0
+
     model->addField({ "deviatoric stress", METHOD_NAME, FieldType::Vector6, [&](const unsigned int i) -> Real* { return &m_stress[i][0]; }, true });
 }
 
@@ -128,9 +130,6 @@ void Elasticity_Test2026::initValues()
             m_model->setParticleState(i, ParticleState::Active);
     }
 
-    LOG_INFO << "Box min: " << m_fixedBoxMin.x() << ", " << m_fixedBoxMin.y() << ", " << m_fixedBoxMin.z();
-    LOG_INFO << "Box max: " << m_fixedBoxMax.x() << ", " << m_fixedBoxMax.y() << ", " << m_fixedBoxMax.z();
-
     // mark all particles in the bounding box as fixed
     determineFixedParticles();
 }
@@ -175,7 +174,8 @@ void Elasticity_Test2026::computeStress()
                     const Vector3r &vj = m_model->getVelocity(neighborIndex);
                     const Real Vj = m_model->getMass(neighborIndex) / m_model->getDensity(neighborIndex);
 
-                    gradV += Vj * (vj - vi) * sim->gradW(xi - xj).transpose();
+                    // Compute correction matrix Li from Yan paper
+                    gradV += Vj * (vj - vi) * (Li * sim->gradW(xi - xj)).transpose();
                 }
 
                 Matrix3r strainRate = static_cast<Real>(0.5) * (gradV + gradV.transpose());
@@ -194,6 +194,7 @@ void Elasticity_Test2026::computeStress()
                 stressMat(1, 2) = stressMat(2, 1) = m_stress[i][5];
 
                 Matrix3r stressRate = static_cast<Real>(2.0) * mu * strainRate;
+                // use equation 12 for the RATE
                 Matrix3r jaumannRate = stressRate + stressMat * spinRate - spinRate * stressMat;
 
                 stressMat += dt * jaumannRate;

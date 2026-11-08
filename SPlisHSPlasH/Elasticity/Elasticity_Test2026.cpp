@@ -2,6 +2,7 @@
 
 #include "Elasticity_Test2026.h"
 #include "SPlisHSPlasH/Simulation.h"
+#include "SPlisHSPlasH/Utilities/MathFunctions.h"
 #include "SPlisHSPlasH/TimeManager.h"
 #include "Utilities/Timing.h"
 
@@ -17,31 +18,36 @@ int Elasticity_Test2026::FIXED_BOX_MAX = -1;
 Elasticity_Test2026::Elasticity_Test2026(FluidModel *model) : NonPressureForceBase(model)
 {
     const unsigned int numParticles = model->numActiveParticles();
-    m_stress.resize(numParticles);
 
     m_youngsModulus = static_cast<Real>(100000.0);
     m_poissonRatio = static_cast<Real>(0.3);
     m_fixedBoxMin.setZero();
     m_fixedBoxMax.setZero();
 
-    // Init stress with 0
+	m_restVolumes.resize(numParticles);
+    m_current_to_initial_index.resize(numParticles);
+	m_initial_to_current_index.resize(numParticles);
+    m_initialNeighbors.resize(numParticles);
 
+    m_L.resize(numParticles, Matrix3r::Zero());
+    m_stress.resize(numParticles, Vector6r::Zero());
+
+    model->addField({ "rest volume", METHOD_NAME, FieldType::Scalar, [&](const unsigned int i) -> Real* { return &m_restVolumes[i]; }, true });
+	model->addField({ "correction matrix", METHOD_NAME, FieldType::Matrix3, [&](const unsigned int i) -> Real* { return &m_L[i](0,0); } });
     model->addField({ "deviatoric stress", METHOD_NAME, FieldType::Vector6, [&](const unsigned int i) -> Real* { return &m_stress[i][0]; }, true });
+
 }
 
 Elasticity_Test2026::~Elasticity_Test2026(void)
 {
+    m_model->removeFieldByName("rest volume");
+	m_model->removeFieldByName("correction matrix");
     m_model->removeFieldByName("deviatoric stress");
 }
 
 void Elasticity_Test2026::deferredInit()
 {
     initValues();
-    LOG_INFO << "METHOD: " << METHOD_NAME;
-    LOG_INFO << "youngsModulus: " << m_youngsModulus;
-    LOG_INFO << "poissonsRatio: " << m_poissonRatio;
-    LOG_INFO << "fixedBoxMin: " << m_fixedBoxMin.x() << ", " << m_fixedBoxMin.y() << ", " << m_fixedBoxMin.z();
-    LOG_INFO << "fixedBoxMax: " << m_fixedBoxMax.x() << ", " << m_fixedBoxMax.y() << ", " << m_fixedBoxMax.z();
 }
 
 void Elasticity_Test2026::initParameters()
@@ -116,22 +122,60 @@ void Elasticity_Test2026::determineFixedParticles()
     }
 }
 
+/** Initialize the particle neighborhoods in the reference configuration.
+* Fix particles which lie in the user-defined bounding box.
+* Finally, compute kernel gradient correction matrices and factorization.
+*/
 void Elasticity_Test2026::initValues()
 {
-    const unsigned int numParticles = m_model->numActiveParticles();
+    Simulation *sim = Simulation::getCurrent();
+    NeighborhoodSearchWrapper* ns = sim->getNeighborhoodSearch();
+    ns->findNeighbors();
 
-    // Reset all particles to Active
+    FluidModel *model = m_model;
+    const unsigned int numParticles = model->numActiveParticles();
+    const unsigned int fluidModelIndex = model->getPointSetIndex();
+
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD
-    #pragma omp parallel for schedule(static)
-#endif
-    for (int i = 0; i < (int)numParticles; i++)
+    #pragma omp parallel default(shared)
     {
-        if (m_model->getParticleState(i) == ParticleState::Fixed)
-            m_model->setParticleState(i, ParticleState::Active);
+        #pragma omp for schedule(static)
+#endif
+        for (int i = 0; i < (int)numParticles; i++)
+        {
+            m_current_to_initial_index[i] = i;
+            m_initial_to_current_index[i] = i;
+
+            // reset particle state
+            if (m_model->getParticleState(i) == ParticleState::Fixed)
+                m_model->setParticleState(i, ParticleState::Active);
+
+            const unsigned int numNeighbors = sim->numberOfNeighbors(fluidModelIndex, fluidModelIndex, i);
+            m_initialNeighbors[i].resize(numNeighbors);
+            for (unsigned int j = 0; j < numNeighbors; j++)
+                m_initialNeighbors[i][j] = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
+            
+            // compute rest volume
+			Real density = model->getMass(i) * sim->W_zero();
+            const Vector3r &xi0 = model->getPosition0(i);
+            for (size_t j = 0; j < m_initialNeighbors[i].size(); j++)
+            {
+                const unsigned int neighborIndex0 = m_initialNeighbors[i][j];
+                const Vector3r &xj0 = model->getPosition0(neighborIndex0);
+                density += model->getMass(neighborIndex0) * sim->W(xi0 - xj0);
+            }
+            m_restVolumes[i] = model->getMass(i) / density;
+            m_stress[i].setZero();
+        }
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     }
+#endif
 
     // mark all particles in the bounding box as fixed
     determineFixedParticles();
+
+    // compute kernel gradient correction matrix
+	computeMatrixL();
 }
 
 void Elasticity_Test2026::step()
@@ -175,15 +219,11 @@ void Elasticity_Test2026::computeStress()
                     const Real Vj = m_model->getMass(neighborIndex) / m_model->getDensity(neighborIndex);
 
                     // Compute correction matrix Li from Yan paper
-                    gradV += Vj * (vj - vi) * (Li * sim->gradW(xi - xj)).transpose();
+                    gradV += Vj * (vj - vi) * (m_L[i] * sim->gradW(xi - xj)).transpose();
                 }
 
                 Matrix3r strainRate = static_cast<Real>(0.5) * (gradV + gradV.transpose());
                 Matrix3r spinRate = static_cast<Real>(0.5) * (gradV - gradV.transpose());
-
-                Real maxStrain = strainRate.norm();
-                Real maxSpin = spinRate.norm();
-                LOG_INFO << "max |strainRate| = " << maxStrain << "  max |spinRate| = " << maxSpin;
 
                 Matrix3r stressMat;
                 stressMat(0, 0) = m_stress[i][0];
@@ -193,9 +233,8 @@ void Elasticity_Test2026::computeStress()
                 stressMat(0, 2) = stressMat(2, 0) = m_stress[i][4];
                 stressMat(1, 2) = stressMat(2, 1) = m_stress[i][5];
 
-                Matrix3r stressRate = static_cast<Real>(2.0) * mu * strainRate;
-                // use equation 12 for the RATE
-                Matrix3r jaumannRate = stressRate + stressMat * spinRate - spinRate * stressMat;
+                // Compute Jaumann stress rate from Yan eq 12
+                Matrix3r jaumannRate = spinRate * stressMat - stressMat * spinRate + static_cast<Real>(2.0) * mu * strainRate;
 
                 stressMat += dt * jaumannRate;
                 m_stress[i][0] = stressMat(0, 0);
@@ -206,13 +245,6 @@ void Elasticity_Test2026::computeStress()
                 m_stress[i][5] = stressMat(1, 2);
             }
         }
-        Real maxStress = 0.0;
-        for (int i = 0; i < (int)numParticles; i++)
-        {
-            for (int k = 0; k < 6; k++)
-                maxStress = std::max(maxStress, std::abs(m_stress[i][k]));
-        }
-        LOG_INFO << "Step " << TimeManager::getCurrent()->getTime() << "  max |stress| = " << maxStress;
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     }
 #endif
@@ -277,11 +309,79 @@ void Elasticity_Test2026::computeForces()
 
 void Elasticity_Test2026::reset()
 {
-    m_stress.resize(m_model->numActiveParticles(), Vector6r::Zero());
+    initValues();
 }
 
 void Elasticity_Test2026::performNeighborhoodSearchSort()
 {
+    const unsigned int numPart = m_model->numActiveParticles();
+	if (numPart == 0)
+		return;
+
+    Simulation *sim = Simulation::getCurrent();
+	NeighborhoodSearchWrapper* ns = sim->getNeighborhoodSearch();
+	ns->applyZSort(m_model->getPointSetIndex(), &m_current_to_initial_index[0]);
+	ns->applyZSort(m_model->getPointSetIndex(), &m_L[0]);
+	ns->applyZSort(m_model->getPointSetIndex(), &m_restVolumes[0]);
+	ns->applyZSort(m_model->getPointSetIndex(), &m_stress[0]);
+
+    for (unsigned int i = 0; i < numPart; i++)
+		m_initial_to_current_index[m_current_to_initial_index[i]] = i;
+}
+
+void Elasticity_Test2026::computeMatrixL()
+{
+	Simulation *sim = Simulation::getCurrent();
+	const unsigned int numParticles = m_model->numActiveParticles();
+	// const unsigned int fluidModelIndex = m_model->getPointSetIndex();
+
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
+    #pragma omp parallel default(shared)
+	{
+        #pragma omp for schedule(static)
+#endif
+		for (int i = 0; i < (int)numParticles; i++)
+		{
+			const unsigned int i0 = m_current_to_initial_index[i];
+			const Vector3r &xi0 = m_model->getPosition0(i0);
+			Matrix3r L;
+			L.setZero();
+
+			const size_t numNeighbors = m_initialNeighbors[i0].size();
+
+			//////////////////////////////////////////////////////////////////////////
+			// Fluid
+			//////////////////////////////////////////////////////////////////////////
+			for (unsigned int j = 0; j < numNeighbors; j++)
+			{
+				// get initial neighbor index considering the current particle order 
+				const unsigned int neighborIndex0 = m_initialNeighbors[i0][j];
+				const unsigned int neighborIndex = m_initial_to_current_index[neighborIndex0];
+
+				const Vector3r &xj0 = m_model->getPosition0(neighborIndex0);
+				const Vector3r xj_xi_0 = xj0 - xi0;
+				const Vector3r gradW = sim->gradW(xj_xi_0);
+
+				// minus because gradW(xij0) == -gradW(xji0)
+				L -= m_restVolumes[neighborIndex] * gradW * xj_xi_0.transpose();
+			}
+
+			// add 1 to z-component. otherwise we get a singular matrix in 2D
+			if (sim->is2DSimulation())
+				L(2, 2) = 1.0;
+
+			bool invertible = false;
+			L.computeInverseWithCheck(m_L[i], invertible, static_cast<Real>(1e-9));
+			if (!invertible)
+			{
+				LOG_INFO << "Matrix not invertible.";
+				MathFunctions::pseudoInverse(L, m_L[i]);
+				//m_L[i] = Matrix3r::Identity();
+			}
+		}
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
+    }
+#endif
 }
 
 void Elasticity_Test2026::saveState(BinaryFileWriter &binWriter)

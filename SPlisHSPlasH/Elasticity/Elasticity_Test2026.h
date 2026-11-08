@@ -22,8 +22,19 @@ namespace SPH
 		Vector3r m_fixedBoxMin;
 		Vector3r m_fixedBoxMax;
 
+		// initial particle indices, used to access their original positions
+		std::vector<unsigned int> m_current_to_initial_index;
+		std::vector<unsigned int> m_initial_to_current_index;
+		// initial particle neighborhood
+		std::vector<std::vector<unsigned int>> m_initialNeighbors;
+		// volumes in rest configuration
+		std::vector<Real> m_restVolumes;
+
 		// Deviatoric shear stress tensor for each particle
 		std::vector<Vector6r> m_stress;
+
+		// First-order consistency correction matrix
+		std::vector<Matrix3r> m_L;
 
 		// Parameters for tensile instability correction
 		// TODO
@@ -69,6 +80,7 @@ namespace SPH
 		virtual void step();
 		virtual void reset();
 		virtual void performNeighborhoodSearchSort();
+		virtual void computeMatrixL();
 
 		virtual void saveState(BinaryFileWriter &binWriter);
 		virtual void loadState(BinaryFileReader &binReader);

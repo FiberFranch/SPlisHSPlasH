@@ -91,16 +91,31 @@ void TimeStepWCSPH::step()
 		clearAccelerations(fluidModelIndex);
 		computeDensities(fluidModelIndex);
 	}
+
+#ifdef ROTATING_CUBE_TEST
+	const Real omega = 1.0;
+	for (unsigned int fluidModelIndex = 0; fluidModelIndex < nModels; fluidModelIndex++)
+	{
+		FluidModel *model = sim->getFluidModel(fluidModelIndex);
+		#pragma omp parallel for schedule(static)
+		for (int i = 0; i < (int)model->numActiveParticles(); i++)
+		{
+			const Vector3r &pos = model->getPosition(i);
+			model->getVelocity(i) = Vector3r(-omega * pos.y(), omega * pos.x(), 0.0);
+		}
+	}
+#endif
+
 	sim->computeNonPressureForces();
 
-
+#ifndef ROTATING_CUBE_TEST
 	for (unsigned int fluidModelIndex = 0; fluidModelIndex < nModels; fluidModelIndex++)
 	{
 		FluidModel *model = sim->getFluidModel(fluidModelIndex);
 		const Real density0 = model->getDensity0();
 		#pragma omp parallel default(shared)
 		{
-			#pragma omp for schedule(static)  
+			#pragma omp for schedule(static)
 			for (int i = 0; i < (int)model->numActiveParticles(); i++)
 			{
 				Real &density = model->getDensity(i);
@@ -111,6 +126,7 @@ void TimeStepWCSPH::step()
 
 		computePressureAccels(fluidModelIndex);
 	}
+#endif
 
 	sim->updateTimeStepSize();
 
@@ -119,22 +135,21 @@ void TimeStepWCSPH::step()
 		FluidModel *model = sim->getFluidModel(fluidModelIndex);
 		#pragma omp parallel default(shared)
 		{
-			#pragma omp for schedule(static) 
+			#pragma omp for schedule(static)
 			for (int i = 0; i < (int)model->numActiveParticles(); i++)
 			{
 				if (model->getParticleState(i) == ParticleState::Active)
 				{
 					Vector3r &pos = model->getPosition(i);
 					Vector3r &vel = model->getVelocity(i);
+	#ifndef ROTATING_CUBE_TEST
 					Vector3r &accel = model->getAcceleration(i);
-#ifndef ROTATING_CUBE_TEST
 					accel += m_simulationData.getPressureAccel(fluidModelIndex, i);
 					vel += accel * h;
-					#else
-					// Prescribed rigid rotation around the z-axis
-                	const Real omega = 1.0;
-                	vel = Vector3r(-omega * pos.y(), omega * pos.x(), 0.0);
-#endif
+	#else
+					const Real omega = 1.0;
+					vel = Vector3r(-omega * pos.y(), omega * pos.x(), 0.0);
+	#endif
 					pos += vel * h;
 				}
 			}

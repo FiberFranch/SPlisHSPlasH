@@ -243,6 +243,54 @@ void Elasticity_Test2026::computeStress()
                 m_stress[i][3] = stressMat(0, 1);
                 m_stress[i][4] = stressMat(0, 2);
                 m_stress[i][5] = stressMat(1, 2);
+
+                if ((i == 0 || i == 4071) && TimeManager::getCurrent()->getTime() < 0.01)
+                {
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
+                    #pragma omp critical(logElasticityDiag)
+#endif
+                    {
+                        LOG_INFO << "############ STEP t=" << TimeManager::getCurrent()->getTime()
+                                << "  i=" << i << " ############";
+
+                        LOG_INFO << "xi        = " << xi.transpose();
+                        LOG_INFO << "vi        = " << vi.transpose();
+                        LOG_INFO << "gradV row0= " << gradV.row(0);
+                        LOG_INFO << "gradV row1= " << gradV.row(1);
+                        LOG_INFO << "gradV row2= " << gradV.row(2);
+                        LOG_INFO << "strainRate row0= " << strainRate.row(0);
+                        LOG_INFO << "strainRate row1= " << strainRate.row(1);
+                        LOG_INFO << "strainRate row2= " << strainRate.row(2);
+                        LOG_INFO << "spinRate   row0= " << spinRate.row(0);
+                        LOG_INFO << "spinRate   row1= " << spinRate.row(1);
+                        LOG_INFO << "spinRate   row2= " << spinRate.row(2);
+                        LOG_INFO << "stress     row0= " << stressMat.row(0);
+                        LOG_INFO << "stress     row1= " << stressMat.row(1);
+                        LOG_INFO << "stress     row2= " << stressMat.row(2);
+
+                        if (numNeighbors > 0)
+                        {
+                            const unsigned int nb = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, 0);
+                            const Vector3r &xj = m_model->getPosition(nb);
+                            const Vector3r &vj = m_model->getVelocity(nb);
+                            const Real Vj = m_model->getMass(nb) / m_model->getDensity(nb);
+                            const Vector3r xij = xi - xj;
+                            const Vector3r vij = vi - vj;
+
+                            LOG_INFO << "neighbor j= " << nb;
+                            LOG_INFO << "xj        = " << xj.transpose();
+                            LOG_INFO << "vj        = " << vj.transpose();
+                            LOG_INFO << "xi - xj   = " << xij.transpose();
+                            LOG_INFO << "vi - vj   = " << vij.transpose();
+                            LOG_INFO << "Vj        = " << Vj;
+                            LOG_INFO << "gradW     = " << sim->gradW(xij).transpose();
+                        }
+
+                        LOG_INFO << "############ END i=" << i << " ############";
+#ifndef ELASTICITY_DEBUG_SINGLE_THREAD
+                    }
+#endif
+                }
             }
         }
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD

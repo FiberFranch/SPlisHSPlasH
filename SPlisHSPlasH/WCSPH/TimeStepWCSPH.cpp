@@ -146,11 +146,18 @@ void TimeStepWCSPH::step()
 					Vector3r &accel = model->getAcceleration(i);
 					accel += m_simulationData.getPressureAccel(fluidModelIndex, i);
 					vel += accel * h;
+					pos += vel * h;
 	#else
-					const Real omega = 1.0;
+					const Real angle = omega * h;
+					const Real c = std::cos(angle);
+					const Real s = std::sin(angle);
+
+					const Real x = pos.x();
+					const Real y = pos.y();
+					pos = Vector3r(c * x - s * y, s * x + c * y, pos.z());
+
 					vel = Vector3r(-omega * pos.y(), omega * pos.x(), 0.0);
 	#endif
-					pos += vel * h;
 				}
 			}
 		}

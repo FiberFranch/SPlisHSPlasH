@@ -25,8 +25,6 @@ namespace SPH
 		// initial particle indices, used to access their original positions
 		std::vector<unsigned int> m_current_to_initial_index;
 		std::vector<unsigned int> m_initial_to_current_index;
-		// initial particle neighborhood
-		std::vector<std::vector<unsigned int>> m_initialNeighbors;
 		// volumes in rest configuration
 		std::vector<Real> m_restVolumes;
 

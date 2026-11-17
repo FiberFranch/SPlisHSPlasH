@@ -27,7 +27,6 @@ Elasticity_Test2026::Elasticity_Test2026(FluidModel *model) : NonPressureForceBa
 	m_restVolumes.resize(numParticles);
     m_current_to_initial_index.resize(numParticles);
 	m_initial_to_current_index.resize(numParticles);
-    m_initialNeighbors.resize(numParticles);
 
     m_L.resize(numParticles, Matrix3r::Zero());
     m_stress.resize(numParticles, Vector6r::Zero());
@@ -150,17 +149,13 @@ void Elasticity_Test2026::initValues()
             if (m_model->getParticleState(i) == ParticleState::Fixed)
                 m_model->setParticleState(i, ParticleState::Active);
 
-            const unsigned int numNeighbors = sim->numberOfNeighbors(fluidModelIndex, fluidModelIndex, i);
-            m_initialNeighbors[i].resize(numNeighbors);
-            for (unsigned int j = 0; j < numNeighbors; j++)
-                m_initialNeighbors[i][j] = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
-            
             // compute rest volume
 			Real density = model->getMass(i) * sim->W_zero();
             const Vector3r &xi0 = model->getPosition0(i);
-            for (size_t j = 0; j < m_initialNeighbors[i].size(); j++)
+            const unsigned int numNeighbors = sim->numberOfNeighbors(fluidModelIndex, fluidModelIndex, i);
+            for (unsigned int j = 0; j < numNeighbors; j++)
             {
-                const unsigned int neighborIndex0 = m_initialNeighbors[i][j];
+                const unsigned int neighborIndex0 = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
                 const Vector3r &xj0 = model->getPosition0(neighborIndex0);
                 density += model->getMass(neighborIndex0) * sim->W(xi0 - xj0);
             }
@@ -180,6 +175,7 @@ void Elasticity_Test2026::initValues()
 
 void Elasticity_Test2026::step()
 {
+    computeMatrixL();
     computeStress();
     computeForces();
 }
@@ -381,7 +377,7 @@ void Elasticity_Test2026::computeMatrixL()
 {
 	Simulation *sim = Simulation::getCurrent();
 	const unsigned int numParticles = m_model->numActiveParticles();
-	// const unsigned int fluidModelIndex = m_model->getPointSetIndex();
+	const unsigned int fluidModelIndex = m_model->getPointSetIndex();
 
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     #pragma omp parallel default(shared)
@@ -390,28 +386,26 @@ void Elasticity_Test2026::computeMatrixL()
 #endif
 		for (int i = 0; i < (int)numParticles; i++)
 		{
-			const unsigned int i0 = m_current_to_initial_index[i];
-			const Vector3r &xi0 = m_model->getPosition0(i0);
+			const Vector3r &xi = m_model->getPosition(i);
 			Matrix3r L;
 			L.setZero();
 
-			const size_t numNeighbors = m_initialNeighbors[i0].size();
+			const unsigned int numNeighbors = sim->numberOfNeighbors(fluidModelIndex, fluidModelIndex, i);
 
 			//////////////////////////////////////////////////////////////////////////
 			// Fluid
 			//////////////////////////////////////////////////////////////////////////
 			for (unsigned int j = 0; j < numNeighbors; j++)
 			{
-				// get initial neighbor index considering the current particle order 
-				const unsigned int neighborIndex0 = m_initialNeighbors[i0][j];
-				const unsigned int neighborIndex = m_initial_to_current_index[neighborIndex0];
+				const unsigned int neighborIndex = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
 
-				const Vector3r &xj0 = m_model->getPosition0(neighborIndex0);
-				const Vector3r xj_xi_0 = xj0 - xi0;
-				const Vector3r gradW = sim->gradW(xj_xi_0);
+				const Vector3r &xj = m_model->getPosition(neighborIndex);
+				const Vector3r xj_xi = xj - xi;
+				const Vector3r gradW = sim->gradW(xj_xi);
+				const Real Vj = m_model->getMass(neighborIndex) / m_model->getDensity(neighborIndex);
 
-				// minus because gradW(xij0) == -gradW(xji0)
-				L -= m_restVolumes[neighborIndex] * gradW * xj_xi_0.transpose();
+				// minus because gradW(xij) == -gradW(xji)
+				L -= Vj * gradW * xj_xi.transpose();
 			}
 
 			// add 1 to z-component. otherwise we get a singular matrix in 2D

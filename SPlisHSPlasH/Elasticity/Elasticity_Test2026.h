@@ -30,6 +30,7 @@ namespace SPH
 
 		// Deviatoric shear stress tensor for each particle
 		std::vector<Vector6r> m_stress;
+		std::vector<Real> m_stressNorm;
 
 		// First-order consistency correction matrix
 		std::vector<Matrix3r> m_L;

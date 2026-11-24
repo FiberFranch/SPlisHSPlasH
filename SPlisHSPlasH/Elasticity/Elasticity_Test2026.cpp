@@ -30,10 +30,12 @@ Elasticity_Test2026::Elasticity_Test2026(FluidModel *model) : NonPressureForceBa
 
     m_L.resize(numParticles, Matrix3r::Zero());
     m_stress.resize(numParticles, Vector6r::Zero());
+    m_stressNorm.resize(numParticles, 0.0);
 
     model->addField({ "rest volume", METHOD_NAME, FieldType::Scalar, [&](const unsigned int i) -> Real* { return &m_restVolumes[i]; }, true });
 	model->addField({ "correction matrix", METHOD_NAME, FieldType::Matrix3, [&](const unsigned int i) -> Real* { return &m_L[i](0,0); } });
     model->addField({ "deviatoric stress", METHOD_NAME, FieldType::Vector6, [&](const unsigned int i) -> Real* { return &m_stress[i][0]; }, true });
+    model->addField({ "deviatoric stress norm", METHOD_NAME, FieldType::Scalar, [&](const unsigned int i) -> Real* { return &m_stressNorm[i]; }, true });
 
 }
 
@@ -42,6 +44,7 @@ Elasticity_Test2026::~Elasticity_Test2026(void)
     m_model->removeFieldByName("rest volume");
 	m_model->removeFieldByName("correction matrix");
     m_model->removeFieldByName("deviatoric stress");
+    m_model->removeFieldByName("deviatoric stress norm");
 }
 
 void Elasticity_Test2026::deferredInit()
@@ -161,6 +164,7 @@ void Elasticity_Test2026::initValues()
             }
             m_restVolumes[i] = model->getMass(i) / density;
             m_stress[i].setZero();
+            m_stressNorm[i] = 0.0;
         }
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     }
@@ -211,6 +215,9 @@ void Elasticity_Test2026::computeStress()
                 {
                     const unsigned int neighborIndex = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
                     const Vector3r &xj = m_model->getPosition(neighborIndex);
+                    /* const Vector3r &vj = m_model->getParticleState(j) == ParticleState::Fixed
+                                       ? vi
+                                       : m_model->getVelocity(neighborIndex); */
                     const Vector3r &vj = m_model->getVelocity(neighborIndex);
                     const Real Vj = m_model->getMass(neighborIndex) / m_model->getDensity(neighborIndex);
 
@@ -239,6 +246,8 @@ void Elasticity_Test2026::computeStress()
                 m_stress[i][3] = stressMat(0, 1);
                 m_stress[i][4] = stressMat(0, 2);
                 m_stress[i][5] = stressMat(1, 2);
+
+                m_stressNorm[i] = m_stress[i].norm();
             }
         }
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD
@@ -280,6 +289,9 @@ void Elasticity_Test2026::computeForces()
                     const Real rhoj = m_model->getDensity(neighborIndex);
                     const Real mj = m_model->getMass(neighborIndex);
 
+                    /* const Vector6r &sigma_j = m_model->getParticleState(j) == ParticleState::Fixed
+                                            ? sigma_i
+                                            : m_stress[neighborIndex]; */
                     const Vector6r &sigma_j = m_stress[neighborIndex];
 
                     Vector3r gradW = sim->gradW(xi - xj);

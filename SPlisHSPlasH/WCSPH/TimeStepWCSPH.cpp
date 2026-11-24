@@ -1,4 +1,4 @@
-#define ROTATING_CUBE_TEST
+// #define ROTATING_CUBE_TEST
 
 #include "TimeStepWCSPH.h"
 #include "SPlisHSPlasH/TimeManager.h"

@@ -5,7 +5,7 @@
         "particleRadius": 0.025,
         "numberOfStepsPerRenderUpdate": 1,
         "simulationMethod": 0,
-        "gravitation": [0, 0, 0],
+        "gravitation": [0, -9.81, 0],
         "cflMethod": 0,
         "cflFactor": 1,
         "cflMaxTimeStepSize": 0.005,

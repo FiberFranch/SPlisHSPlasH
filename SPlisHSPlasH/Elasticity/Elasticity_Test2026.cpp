@@ -203,52 +203,46 @@ void Elasticity_Test2026::computeStress()
 #endif
         for (int i = 0; i < (int)numParticles; i++)
         {
-            if (m_model->getParticleState(i) == ParticleState::Active)
+            const Vector3r &xi = m_model->getPosition(i);
+            const Vector3r &vi = m_model->getVelocity(i);
+            Matrix3r gradV = Matrix3r::Zero();
+
+            const unsigned int numNeighbors = sim->numberOfNeighbors(fluidModelIndex, fluidModelIndex, i);
+
+            for (unsigned int j = 0; j < numNeighbors; j++)
             {
-                const Vector3r &xi = m_model->getPosition(i);
-                const Vector3r &vi = m_model->getVelocity(i);
-                Matrix3r gradV = Matrix3r::Zero();
+                const unsigned int neighborIndex = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
+                const Vector3r &xj = m_model->getPosition(neighborIndex);
+                const Vector3r &vj = m_model->getVelocity(neighborIndex);
+                const Real Vj = m_model->getMass(neighborIndex) / m_model->getDensity(neighborIndex);
 
-                const unsigned int numNeighbors = sim->numberOfNeighbors(fluidModelIndex, fluidModelIndex, i);
-
-                for (unsigned int j = 0; j < numNeighbors; j++)
-                {
-                    const unsigned int neighborIndex = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
-                    const Vector3r &xj = m_model->getPosition(neighborIndex);
-                    const Vector3r &vj = m_model->getParticleState(j) == ParticleState::Fixed
-                                       ? vi
-                                       : m_model->getVelocity(neighborIndex);
-                    // const Vector3r &vj = m_model->getVelocity(neighborIndex);
-                    const Real Vj = m_model->getMass(neighborIndex) / m_model->getDensity(neighborIndex);
-
-                    // Compute correction matrix Li from Yan paper
-                    gradV += Vj * (vj - vi) * (m_L[i] * sim->gradW(xi - xj)).transpose();
-                }
-
-                Matrix3r strainRate = static_cast<Real>(0.5) * (gradV + gradV.transpose());
-                Matrix3r spinRate = static_cast<Real>(0.5) * (gradV - gradV.transpose());
-
-                Matrix3r stressMat;
-                stressMat(0, 0) = m_stress[i][0];
-                stressMat(1, 1) = m_stress[i][1];
-                stressMat(2, 2) = m_stress[i][2];
-                stressMat(0, 1) = stressMat(1, 0) = m_stress[i][3];
-                stressMat(0, 2) = stressMat(2, 0) = m_stress[i][4];
-                stressMat(1, 2) = stressMat(2, 1) = m_stress[i][5];
-
-                // Compute Jaumann stress rate from Yan eq 12
-                Matrix3r jaumannRate = spinRate * stressMat - stressMat * spinRate + static_cast<Real>(2.0) * mu * strainRate;
-
-                stressMat += dt * jaumannRate;
-                m_stress[i][0] = stressMat(0, 0);
-                m_stress[i][1] = stressMat(1, 1);
-                m_stress[i][2] = stressMat(2, 2);
-                m_stress[i][3] = stressMat(0, 1);
-                m_stress[i][4] = stressMat(0, 2);
-                m_stress[i][5] = stressMat(1, 2);
-
-                m_stressNorm[i] = m_stress[i].norm();
+                // Compute correction matrix Li from Yan paper
+                gradV += Vj * (vj - vi) * (m_L[i] * sim->gradW(xi - xj)).transpose();
             }
+
+            Matrix3r strainRate = static_cast<Real>(0.5) * (gradV + gradV.transpose());
+            Matrix3r spinRate = static_cast<Real>(0.5) * (gradV - gradV.transpose());
+
+            Matrix3r stressMat;
+            stressMat(0, 0) = m_stress[i][0];
+            stressMat(1, 1) = m_stress[i][1];
+            stressMat(2, 2) = m_stress[i][2];
+            stressMat(0, 1) = stressMat(1, 0) = m_stress[i][3];
+            stressMat(0, 2) = stressMat(2, 0) = m_stress[i][4];
+            stressMat(1, 2) = stressMat(2, 1) = m_stress[i][5];
+
+            // Compute Jaumann stress rate from Yan eq 12
+            Matrix3r jaumannRate = spinRate * stressMat - stressMat * spinRate + static_cast<Real>(2.0) * mu * strainRate;
+
+            stressMat += dt * jaumannRate;
+            m_stress[i][0] = stressMat(0, 0);
+            m_stress[i][1] = stressMat(1, 1);
+            m_stress[i][2] = stressMat(2, 2);
+            m_stress[i][3] = stressMat(0, 1);
+            m_stress[i][4] = stressMat(0, 2);
+            m_stress[i][5] = stressMat(1, 2);
+
+            m_stressNorm[i] = m_stress[i].norm();
         }
 #ifndef ELASTICITY_DEBUG_SINGLE_THREAD
     }
@@ -288,11 +282,7 @@ void Elasticity_Test2026::computeForces()
                     const Vector3r &xj = m_model->getPosition(neighborIndex);
                     const Real rhoj = m_model->getDensity(neighborIndex);
                     const Real mj = m_model->getMass(neighborIndex);
-
-                    const Vector6r &sigma_j = m_model->getParticleState(j) == ParticleState::Fixed
-                                            ? sigma_i
-                                            : m_stress[neighborIndex];
-                    // const Vector6r &sigma_j = m_stress[neighborIndex];
+                    const Vector6r &sigma_j = m_stress[neighborIndex];
 
                     Vector3r gradW = sim->gradW(xi - xj);
 

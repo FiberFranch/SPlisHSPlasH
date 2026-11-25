@@ -215,10 +215,10 @@ void Elasticity_Test2026::computeStress()
                 {
                     const unsigned int neighborIndex = sim->getNeighbor(fluidModelIndex, fluidModelIndex, i, j);
                     const Vector3r &xj = m_model->getPosition(neighborIndex);
-                    /* const Vector3r &vj = m_model->getParticleState(j) == ParticleState::Fixed
+                    const Vector3r &vj = m_model->getParticleState(j) == ParticleState::Fixed
                                        ? vi
-                                       : m_model->getVelocity(neighborIndex); */
-                    const Vector3r &vj = m_model->getVelocity(neighborIndex);
+                                       : m_model->getVelocity(neighborIndex);
+                    // const Vector3r &vj = m_model->getVelocity(neighborIndex);
                     const Real Vj = m_model->getMass(neighborIndex) / m_model->getDensity(neighborIndex);
 
                     // Compute correction matrix Li from Yan paper
@@ -289,10 +289,10 @@ void Elasticity_Test2026::computeForces()
                     const Real rhoj = m_model->getDensity(neighborIndex);
                     const Real mj = m_model->getMass(neighborIndex);
 
-                    /* const Vector6r &sigma_j = m_model->getParticleState(j) == ParticleState::Fixed
+                    const Vector6r &sigma_j = m_model->getParticleState(j) == ParticleState::Fixed
                                             ? sigma_i
-                                            : m_stress[neighborIndex]; */
-                    const Vector6r &sigma_j = m_stress[neighborIndex];
+                                            : m_stress[neighborIndex];
+                    // const Vector6r &sigma_j = m_stress[neighborIndex];
 
                     Vector3r gradW = sim->gradW(xi - xj);
 
@@ -332,6 +332,7 @@ void Elasticity_Test2026::performNeighborhoodSearchSort()
 	ns->applyZSort(m_model->getPointSetIndex(), &m_L[0]);
 	ns->applyZSort(m_model->getPointSetIndex(), &m_restVolumes[0]);
 	ns->applyZSort(m_model->getPointSetIndex(), &m_stress[0]);
+	ns->applyZSort(m_model->getPointSetIndex(), &m_stressNorm[0]);
 
     for (unsigned int i = 0; i < numPart; i++)
 		m_initial_to_current_index[m_current_to_initial_index[i]] = i;

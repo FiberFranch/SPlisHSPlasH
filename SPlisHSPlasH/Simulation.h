@@ -438,6 +438,8 @@ namespace SPH
 		void performNeighborhoodSearchSort();
 
 		void computeNonPressureForces();
+		void computeNonPressureForcesMinusElasticity();
+		void computeElasticityAndXSPH();
 
 		void animateParticles();
 		void emitParticles();

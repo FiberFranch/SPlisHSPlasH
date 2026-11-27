@@ -106,7 +106,8 @@ void TimeStepWCSPH::step()
 	}
 #endif
 
-	sim->computeNonPressureForces();
+	// sim->computeNonPressureForces();
+	sim->computeNonPressureForcesMinusElasticity();
 
 #ifndef ROTATING_CUBE_TEST
 	for (unsigned int fluidModelIndex = 0; fluidModelIndex < nModels; fluidModelIndex++)
@@ -127,6 +128,8 @@ void TimeStepWCSPH::step()
 		computePressureAccels(fluidModelIndex);
 	}
 #endif
+
+	sim->computeElasticityAndXSPH();
 
 	sim->updateTimeStepSize();
 

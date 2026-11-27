@@ -520,6 +520,33 @@ void Simulation::computeNonPressureForces()
 	STOP_TIMING_AVG
 }
 
+void Simulation::computeNonPressureForcesMinusElasticity()
+{
+	START_TIMING("computeNonPressureForcesMinusElasticity")
+	for (unsigned int i = 0; i < numberOfFluidModels(); i++)
+	{
+		FluidModel *fm = getFluidModel(i);
+		fm->computeVorticity();
+		fm->computeSurfaceTension();
+		fm->computeViscosity();
+		fm->computeDragForce();
+	}
+	STOP_TIMING_AVG
+}
+
+void Simulation::computeElasticityAndXSPH()
+{
+	START_TIMING("computeElasticityAndXSPH")
+	for (unsigned int i = 0; i < numberOfFluidModels(); i++)
+	{
+		FluidModel *fm = getFluidModel(i);
+		fm->computeElasticity();
+		fm->computeXSPH();
+	}
+	STOP_TIMING_AVG
+}
+
+
 void Simulation::reset()
 {
 	// reset fluid models

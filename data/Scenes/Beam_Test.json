@@ -1,7 +1,7 @@
 {
 	"Configuration": 
 	{
-		"timeStepSize": 0.002,
+		"timeStepSize": 0.00001,
 		"particleRadius": 0.025,
 		"numberOfStepsPerRenderUpdate": 1,
 		"simulationMethod": 0,
@@ -39,7 +39,7 @@
             },
 			"Elasticity Test 2026": 
 			{
-				"youngsModulus": 5000000.0,
+				"youngsModulus": 100000000.0,
 				"poissonsRatio": 0.33,
 				"fixedBoxMin" : [-10,-10,-10], 
 				"fixedBoxMax" : [-1.5,10,10]

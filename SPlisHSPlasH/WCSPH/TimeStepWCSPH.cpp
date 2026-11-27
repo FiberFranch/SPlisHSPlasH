@@ -1,4 +1,5 @@
 // #define ROTATING_CUBE_TEST
+#define USE_ELASTICITY_TEST_2026
 
 #include "TimeStepWCSPH.h"
 #include "SPlisHSPlasH/TimeManager.h"
@@ -106,8 +107,11 @@ void TimeStepWCSPH::step()
 	}
 #endif
 
-	// sim->computeNonPressureForces();
+#ifndef USE_ELASTICITY_TEST_2026
+	sim->computeNonPressureForces();
+#else
 	sim->computeNonPressureForcesMinusElasticity();
+#endif
 
 #ifndef ROTATING_CUBE_TEST
 	for (unsigned int fluidModelIndex = 0; fluidModelIndex < nModels; fluidModelIndex++)
@@ -129,7 +133,9 @@ void TimeStepWCSPH::step()
 	}
 #endif
 
+#ifdef USE_ELASTICITY_TEST_2026
 	sim->computeElasticityAndXSPH();
+#endif
 
 	sim->updateTimeStepSize();
 
@@ -172,7 +178,6 @@ void TimeStepWCSPH::step()
 	// Compute new time	
 	tm->setTime (tm->getTime () + h);
 }
-
 
 void TimeStepWCSPH::reset()
 {
